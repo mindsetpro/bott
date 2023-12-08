@@ -78,6 +78,3 @@ import os
 token = os.getenv('TOKEN')
 if token is not None:
     bot.run(token)
-else:
-    print("Error: TOKEN environment variable is not set.")
-
