@@ -75,6 +75,9 @@ def get_character_image_url(character_name):
         
 import os
 
-bot.run(os.getenv('TOKEN'))
-
+token = os.getenv('TOKEN')
+if token is not None:
+    bot.run(token)
+else:
+    print("Error: TOKEN environment variable is not set.")
 
