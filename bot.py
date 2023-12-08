@@ -1,73 +1,79 @@
 import discord
-from discord.ext import commands, tasks
-import json
-import asyncio
-import itertools
+from discord.ext import commands
+import requests
+from bs4 import BeautifulSoup
 
-# Intents
 intents = discord.Intents.all()
-intents.members = True
+bot = commands.Bot(command_prefix=";", intents=intents)
 
-# Bot 
-bot = commands.Bot(command_prefix=';', intents=intents)
-
-# Config
-with open('config.json') as f:
-    config = json.load(f)
-
-bot.muted_users = [] 
-bot.banned_words = []
-status = itertools.cycle(['W Bot frfr', 'grah', 'You thought i was feeling you'])
-
-# Events
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user} - {bot.user.id}')
+    print(f'{bot.user.name} has connected to Discord!')
 
-    bot.log_channel = bot.get_channel(config["log_channel_id"])
-    change_status.start()
+@bot.command(name='start', help='start your Dragon Ball Adventure!')
+async def start_game(ctx):
+    # Create an embed for starting character information
+    embed = discord.Embed(
+        title='<:Super_Recovery_Drink:1182699471591706664> Game Start <:Super_Recovery_Drink:1182699471591706664>',
+        description='Choose your character:',
+        color=0x7289DA  # Discord's blurple color
+    )
 
-@bot.event
-async def on_member_join(member):
-    await member.send(f"Welcome to the {member.guild.name} Discord!")
+    # Add starter characters
+    starter_characters = ['Vegeta', 'Goku']
+    characters_string = '\n'.join([f'• {char}' for char in starter_characters])
+    embed.add_field(name='Starter Characters', value=characters_string, inline=False)
     
-    embed = discord.Embed(description=f"**{member}** has joined the server")
-    await bot.log_channel.send(embed=embed)
-    
-@bot.event   
-async def on_message(message):
-    if message.content.lower() in [word.lower() for word in bot.banned_words] and message.author not in bot.muted_users:
-        await message.delete()
-        await message.channel.send("You can't use that word!", delete_after=5)
+    # Set the footer
+    embed.set_footer(text='DBZ Dokkan RV')
 
-    await bot.process_commands(message)
+    # Send the embed with character information
+    start_message = await ctx.send(embed=embed)
 
-# Commands
-@bot.command()
-@commands.is_owner()
-async def config(ctx):   
-    embed = discord.Embed(title="Config", description="**Prefix:** "+config["prefix"])
-    await ctx.send(embed=embed)
+    # Ask for the user's choice
+    await ctx.send('To choose your character, type the name of your selection.')
 
-@bot.command()
-@commands.has_permissions(ban_members=True)
-async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
-    await member.ban(reason=reason)
-    embed = discord.Embed(description=f"**{member}** was banned by {ctx.author} for {reason}")
-    await ctx.send(embed=embed)
+    def check(message):
+        return message.author == ctx.author and message.channel == ctx.channel
 
-@bot.command()   
-async def mute(ctx, member: discord.Member, *, reason="No reason provided"):
-    bot.muted_users.append(member.id)
+    try:
+        # Wait for the user to respond with their character choice
+        choice_msg = await bot.wait_for('message', check=check, timeout=30)
+        character_choice = choice_msg.content.capitalize()
 
-    await member.add_roles(discord.utils.get(ctx.guild.roles, name="Muted"))
-      
-    embed = discord.Embed(description=f"**{member}** was muted by {ctx.author} for {reason}")
-    await ctx.send(embed=embed)
+        # Check if the chosen character is valid
+        if character_choice in starter_characters:
+            # Get the character image from the Dragon Ball Wiki
+            image_url = get_character_image_url(character_choice)
+            
+            # Add the character image to the embed
+            embed.set_image(url=image_url)
 
-# Background Task
-@tasks.loop(minutes=5)
-async def change_status():
-    await bot.change_presence(activity=discord.Game(next(status))) 
+            # Send the updated embed
+            await ctx.send(f'You have chosen {character_choice}! Let the adventure begin!', embed=embed)
+        else:
+            await ctx.send('Invalid choice. Please run !start again and choose a valid character.')
 
-bot.run(config["token"])
+    except TimeoutError:
+        await ctx.send('Character selection timed out. Please run !start again.')
+
+# Function to get character image URL from Dragon Ball Wiki
+def get_character_image_url(character_name):
+    base_url = 'https://dragonball.fandom.com/wiki/'
+    formatted_name = character_name.replace(' ', '_')
+    full_url = f'{base_url}{formatted_name}'
+
+    try:
+        response = requests.get(full_url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        image_tag = soup.find('img', {'class': 'pi-image-thumbnail'})
+        image_url = image_tag['src'] if image_tag else None
+        return image_url
+    except Exception as e:
+        print(f'Error fetching character image: {e}')
+        return None
+        
+import os
+
+bot.run(os.getenv('TOKEN'))
+
