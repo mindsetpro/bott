@@ -76,5 +76,4 @@ def get_character_image_url(character_name):
 import os
 
 token = os.getenv('TOKEN')
-if token is not None:
-    bot.run(token)
+bot.run(token)
